@@ -18,6 +18,7 @@ const Togglable = React.forwardRef((props, ref) => {
     }
   })
 
+  // nappi omalla tekstillä joka piilottaa ja näyttää omat kentät, jotka annettu props.childrenissä
   return (
     <div>
       <div style={hideWhenVisible}>

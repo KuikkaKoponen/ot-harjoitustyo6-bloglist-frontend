@@ -44,13 +44,13 @@ const BlogForm = ({ createBlog }) => {
       <form onSubmit={addBlog}>
          Author
         <input className="author"
-          value={newBlogTitle}
-          onChange={handleBlogTitleChange}
+          value={newBlogAuthor}
+          onChange={handleBlogAuthorChange}
         /> <br></br>
         Title
         <input className="title"
-          value={newBlogAuthor}
-          onChange={handleBlogAuthorChange}
+          value={newBlogTitle}
+          onChange={handleBlogTitleChange}
         /> <br></br>
         Url
         <input className="url"

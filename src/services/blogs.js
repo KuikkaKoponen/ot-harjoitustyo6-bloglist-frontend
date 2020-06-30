@@ -2,6 +2,7 @@ import axios from 'axios'
 //const baseUrl = '/api/blogs'  // tämä toimii kun tehdään build ja siirretään backend kansioon
 const baseUrl = 'http://localhost:3001/api/blogs'
 
+//  ilmeisesti muuttujan voi tehdä tällä tavalla myös
 let token = null
 
 const setToken = newToken => {

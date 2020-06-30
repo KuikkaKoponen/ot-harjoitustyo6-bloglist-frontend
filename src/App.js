@@ -3,34 +3,40 @@ import Blog from './components/Blog'
 import LoginForm from './components/LoginForm'
 import BlogForm from './components/BlogForm'
 import Togglable from './components/Togglable'
-import blogService from './services/blogs'
 import loginService from './services/login'
+import { useSelector, useDispatch } from 'react-redux'
+import { setNotification } from './reducers/notificationReducer'
+import { initializeblogs, createBlog, createLike, removeBlog } from './reducers/blogsReducer'
+import { setUser, setNull } from './reducers/userReducer'
 
 const App = () => {
-  const [blogs, setBlogs] = useState([])
   const [username, setUsername] = useState('')
   const [password, setPassword] = useState('')
-  const [errorMessage, setErrorMessage] = useState(null)
-  const [user, setUser] = useState(null)
   const [loginVisible, setLoginVisible] = useState(false)
 
-  useEffect(() => {
-    blogService.getAll().then(blogs =>
-      setBlogs( blogs.sort(compareLikes) )
-    )
-  }, [])
+  // käytin nyt useStatea. Olisi voinut käyttää reduxia
+  const [bloggers, setbloggers] = useState('')
 
+  const bloglist = useSelector(state => state.blogs)
+  const user = useSelector(state => state.user)
+  const dispatch = useDispatch()
+
+  useEffect(() => {
+    dispatch(initializeblogs())
+  },[dispatch])
+
+  // mikäli käyttäjä on kirjautunut asetetaan storeen käyttäjän tiedot
   useEffect(() => {
     const loggedUserJSON = window.localStorage.getItem('loggedBlogappUser')
     if (loggedUserJSON) {
       const user = JSON.parse(loggedUserJSON)
-      setUser(user)
-      blogService.setToken(user.token)
+      dispatch(setUser(user))
     }
-  }, [])
+  }, [dispatch])
 
+  // notifikaatio omalla messagella
   const Notification = ({ message }) => {
-    if (message === null) {
+    if (message === '') {
       return null
     }
     return (
@@ -74,16 +80,11 @@ const App = () => {
       window.localStorage.setItem(
         'loggedBlogappUser', JSON.stringify(user)
       )
-
-      blogService.setToken(user.token)
-      setUser(user)
+      dispatch(setUser(user))
       setUsername('')
       setPassword('')
     } catch (exception) {
-      setErrorMessage('wrong credentials')
-      setTimeout(() => {
-        setErrorMessage(null)
-      }, 5000)
+      dispatch(setNotification('wrong credentials', 5))
     }
   }
 
@@ -92,121 +93,83 @@ const App = () => {
       window.localStorage.removeItem(
         'loggedBlogappUser', JSON.stringify(user)
       )
-      window.location.reload(false); 
+      dispatch(setNull())
+      window.location.reload(false)
     } catch (exception) {
-      setErrorMessage('logout failed')
-      setTimeout(() => {
-        setErrorMessage(null)
-      }, 5000)
+      dispatch(setNotification('logout failed', 5))
     }
   }
 
-  // addBlog funktio heitetään BlogFormille 
+  // addBlog funktio heitetään BlogFormille
+  // TODO: virheilmoitus jos tietokantaan tallennus epäonnistuu, esim. liian vähän merkkejä
   const addBlog = (blogObject) => {
     noteFormRef.current.toggleVisibility() // kutsutaan reffin toggleVisibilitiä. Piilotetaan addblog form
-    blogService
-      .create(blogObject)
-      .then(returnedBlog => {
-        setBlogs(blogs.concat(returnedBlog).sort(compareLikes))
-        setErrorMessage(
-          'New blog added'
-        )
-        setTimeout(() => {
-          setErrorMessage(null)
-        }, 5000)
-
-      }).catch(error => {
-        console.log(error.message)
-        setErrorMessage(
-          'Error when  adding new blog'
-        )
-        setTimeout(() => {
-          setErrorMessage(null)
-        }, 5000)
-      })
+    dispatch(createBlog(blogObject))
+    dispatch(setNotification(`${blogObject.author} added`, 5))
   }
 
   /// toimii
   const addLike = (blogObject) => {
-    const update = {
-      user: blogObject.user._id,
-      likes: blogObject.likes + 1,
-      author: blogObject.author,
-      title: blogObject.title,
-      url: blogObject.url
-    }
-    blogService
-      .update(blogObject.id, update)
-      .then(returnedBlog => {
-        setBlogs(blogs.map(blog => blog.id !== returnedBlog.id ? blog : returnedBlog).sort(compareLikes))
-        setErrorMessage(`You have liked ${returnedBlog.title}`)
-        setTimeout(() => {
-          setErrorMessage(null)
-        }, 5000)
+    dispatch(createLike(blogObject))
+    dispatch(setNotification(`You have liked ${blogObject.title}`, 5))
 
-      }).catch(error => {
-        console.log(error.message)
-        setErrorMessage(
-          'Error when updating blog'
-        )
-        setTimeout(() => {
-          setErrorMessage(null)
-        }, 5000)
-      })
   }
 
   /// toimii
   const deleteBlog = (blogObject) => {
     if (window.confirm(`Do you really want delete ${blogObject.title}?`)) {
-      blogService
-        .remove(blogObject.id)
-        .then(returnedBlog => {
-          setBlogs(blogs.filter(blog => blog.id !== blogObject.id).sort(compareLikes))
-          setErrorMessage(`You have deleted ${blogObject.title}`)
-          setTimeout(() => {
-            setErrorMessage(null)
-          }, 5000)
-
-        }).catch(error => {
-          console.log(error.message)
-          setErrorMessage(
-            'Only own blog can be deleted'
-          )
-          setTimeout(() => {
-            setErrorMessage(null)
-          }, 5000)
-        })
+      dispatch(removeBlog(blogObject))
+      dispatch(setNotification(`You have deleted ${blogObject.title}`, 5))
     }
   }
 
   const noteFormRef = React.createRef()  // luodaan reffi. Se välitetään Togglablen useImperativeHandlelle, jota sitten kutsutaan
+  // eli reffin avulla voidaan kutsua komponenttien sisällä olevia funktioita ulkopuolella olevista funtioista kuten nyt yllä olevasta addBlogista
 
   const blogForm = () => (
     <div>
       <button onClick={handleLogOut}>Log out</button>
-      <Togglable buttonLabel="Add new blog" ref={noteFormRef}> 
+      <Togglable buttonLabel="Add new blog" ref={noteFormRef}>
         <BlogForm createBlog={addBlog}/>
       </Togglable>
     </div>
   )
 
-  const compareLikes = (a, b) => {
-    return a.likes - b.likes
+  const showBlogs = (bloglist) => {
+    return (
+      <div>
+        <h2>blogs</h2>
+        {bloglist.map(blog =>
+          <Blog key={blog.id} blog={blog} addLike={addLike} deleteBlog={deleteBlog} />
+        )}
+      </div>
+    )
+  }
+  // jatka tästä!
+  /*
+  const bloggers = (bloglist) => {
+    {bloglist.map(blog => 
+      if (bloggers.findIndex(blog => blog.author === author) < -1) {
+
+      } 
+
+    return (
+      <div>
+        <h2>Users</h2>
+        {bloglist.map(blog =>
+          <Blog key={blog.id} blog={blog} addLike={addLike} deleteBlog={deleteBlog} />
+        )}
+      </div>
+    )
   }
 
-  const showBlogs = () => (
-    <div>
-      <h2>blogs</h2>
-      {blogs.map(blog =>
-        <Blog key={blog.id} blog={blog} addLike={addLike} deleteBlog={deleteBlog} />
-      )}
-    </div>
-  )
+    */   
+
 
   return (
-    <div>
+    <div className="container">
       <h2>Blog site</h2>
-      <Notification message={errorMessage} />
+      <Notification message={useSelector(state => state.notification)} />
       {user === null ?
         loginForm() :
         <div>
@@ -217,7 +180,7 @@ const App = () => {
 
       {user === null ?
         <div></div> :
-        showBlogs()
+        showBlogs(bloglist)
       }
     </div>
   )
